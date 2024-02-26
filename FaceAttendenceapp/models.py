@@ -68,3 +68,9 @@ class User(AbstractBaseUser,PermissionsMixin):
     def is_staff(self):
         "Is the user a member of staff?"
         return self.is_admin
+    
+    
+    
+class AttendenceModel(models.Model):
+    name=models.CharField(max_length=255, null=True , blank=True)
+    dateAndtime=models.TimeField()

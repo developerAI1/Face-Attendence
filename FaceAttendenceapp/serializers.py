@@ -33,3 +33,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
   class Meta:
     model = User
     fields = ['id', 'email', 'firstname','lastname']
+    
+class AttendenceModelSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = AttendenceModel
+    fields = ['name', 'dateAndtime']

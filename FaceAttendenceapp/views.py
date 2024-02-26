@@ -17,8 +17,15 @@ import cv2
 import pickle 
 import numpy as np
 import os
+import time
+from sklearn.neighbors import KNeighborsClassifier
+from datetime import datetime , timedelta
 
-facedetect=cv2.CascadeClassifier(os.getcwd() +"\model\haarcascade_frontalface_default.xml")
+working_directory=os.getcwd()
+facedetect=cv2.CascadeClassifier(f'{working_directory}/model/haarcascade_frontalface_default.xml')
+data_directory_path=f'{working_directory}/data/'
+
+
 
 # Create your views here
 def get_tokens_for_user(user):  
@@ -77,19 +84,29 @@ class Videocapture(APIView):
 
     def post(self, request):
         video = cv2.VideoCapture(0)
+        
+        if not video.isOpened():
+            return Response({"message": "Could Not Open Camera"},status=status.HTTP_400_BAD_REQUEST)
+        
         Name = input(" Please Enter your Name : ")
         while True:
             ret, frame = video.read()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
             faces = facedetect.detectMultiScale(gray, 1.3, 5)
             for (x, y, w, h) in faces:
                 crop_img = frame[y:y+h, x:x+w, :]
                 resized_img = cv2.resize(crop_img, (50, 50))
+                
                 if len(self.faces_data) <= 20 and self.i % 10 == 0:
                     self.faces_data.append(resized_img)
                 self.i += 1
-                cv2.putText(frame, str(len(self.faces_data)), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (50, 50, 255), 1)
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (50, 50, 255), 1)
+                
+                # put text on the frame
+                cv2.putText(frame, str(len(self.faces_data)), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (50, 50, 255), 3)
+                
+                # Showing the rectangle on the image
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (50, 50, 255), 3)
 
             cv2.imshow("Frame", frame)
             k = cv2.waitKey(1)
@@ -99,38 +116,87 @@ class Videocapture(APIView):
         video.release()
         cv2.destroyAllWindows()
 
+        print('faces data============>>>',self.faces_data )
+        # convert every image pixel to vector arrays
         self.faces_data=np.asarray(self.faces_data)
-        self.faces_data=self.faces_data.reshape(100 , -1)
+        
+        # Reshape the array
+        self.faces_data=self.faces_data.reshape(20 , -1)
+        
+        print('faces data 2 ============>>>',self.faces_data )
+        
         try:
             # Assuming self.faces_data and Name are defined properly in your code        
-            if 'names.pkl' not in os.listdir(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data'):
+            if 'names.pkl' not in os.listdir(data_directory_path):
                 names = [Name] * 20
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\names.pkl', 'wb') as f:
+                with open(f'{data_directory_path}/names.pkl', 'wb') as f:
                     pickle.dump(names, f)
             else:
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\names.pkl', 'rb') as f:
+                with open(f'{data_directory_path}/names.pkl', 'rb') as f:
                     names = pickle.load(f)
                 names = names + [Name] * 20
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\names.pkl', 'wb') as f:
+                with open(f'{data_directory_path}/names.pkl', 'wb') as f:
                     pickle.dump(names, f)
 
-            if 'faces_data.pkl' not in os.listdir(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data'):
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\faces_data.pkl', 'wb') as f:
+            if 'faces_data.pkl' not in os.listdir(data_directory_path):
+                with open(f'{data_directory_path}/faces_data.pkl', 'wb') as f:
                     pickle.dump(self.faces_data, f)
             else:
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\faces_data.pkl', 'rb') as f:
+                with open(f'{data_directory_path}/faces_data.pkl', 'rb') as f:
                     faces = pickle.load(f)
                 faces = np.append(faces, self.faces_data, axis=0)
-                with open(r'C:\Users\Mandeep\Desktop\AttendenceSystem\Face_Attendence\data\faces_data.pkl', 'wb') as f:
+                with open(f'{data_directory_path}/faces_data.pkl', 'wb') as f:
                     pickle.dump(faces, f)
 
             return Response({"message":"Everything Working fine"},status=status.HTTP_200_OK)
+        
         except Exception as e:
             return Response({'message': str(e)},status=status.HTTP_400_BAD_REQUEST)
-
-
-
-
-
                             
-                
+class ImageClassify(APIView):
+    def post(self,request):
+        video = cv2.VideoCapture(0)
+        if not video.isOpened():
+            return Response({"message":"camera is not Opened"},status=status.HTTP_400_BAD_REQUEST)
+            
+        # Load Names.pkl file
+        with open(f'{data_directory_path}/names.pkl','rb') as f:
+            LABELS=pickle.load(f)
+            
+        # load faces.pkl file
+        with open(f'{data_directory_path}/faces_data.pkl','rb') as f:
+            FACES=pickle.load(f)
+            
+        # make object of knn classifier project
+        knn=KNeighborsClassifier(n_neighbors=5)
+        knn.fit(FACES , LABELS)                         # fit the model
+        
+        try:
+            while True:
+                ret, frame = video.read()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = facedetect.detectMultiScale(gray, 1.3, 5)
+                for (x, y, w, h) in faces:
+                    crop_img = frame[y:y+h, x:x+w, :]
+                    
+                    # convert resized image into sinle shape
+                    resized_img = cv2.resize(crop_img, (50, 50)).flatten().reshape(1,-1)
+                    
+                    # predict or classify the face
+                    output=knn.predict(resized_img)
+                    ts=time.time()
+                    date=datetime.fromtimestamp(ts).strftime("%d-%m-%Y")
+                    timestamp=datetime.fromtimestamp(ts).strftime("%H:%M-%S")
+                    print("Name",str(output[0]) ,"timestamp",timestamp ,"date",date)
+                    cv2.putText(frame , str(output[0]),(x,y-15),cv2.FONT_HERSHEY_COMPLEX,1,(255,255,255),3)
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (50, 50, 255), 1)
+
+                cv2.imshow("Frame", frame)
+                k = cv2.waitKey(1)
+                if k == ord('q') :
+                    break
+            video.release()
+            cv2.destroyAllWindows()
+            return Response(status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'message': str(e)},status=status.HTTP_400_BAD_REQUEST)

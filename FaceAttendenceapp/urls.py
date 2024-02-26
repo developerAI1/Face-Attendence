@@ -10,6 +10,6 @@ urlpatterns = [
     path('login/', UserLoginView.as_view(),name='loginin'),
     path('userprofile/', UserProfileView.as_view(),name='userprofile'),
     path('logout/', LogoutUser.as_view(),name='logout'),
-    path('videocap/', Videocapture.as_view(),name='videocap')
-
+    path('videocap/', Videocapture.as_view(),name='videocap'),
+    path('classify/', ImageClassify.as_view(),name='classify'),
 ]
